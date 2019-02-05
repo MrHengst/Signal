@@ -25,7 +25,7 @@
 #define lsWeiss 8
 #define zs3 0
 //#define zs3v 0
-//Pins für Encpder
+//Pins für Encoder
 #define pinA 9
 #define pinB 8
 #define stepsPerNotch 4 // Klicks bis zum nächsten Schritt
@@ -34,19 +34,17 @@
 /*
    Definition der Variablen
 */
+bool manu = false;                    //Umschaltung Auto <> Manuell
 int randomNumber;                     // Zufallszahl
 int lastRandomNumber;                 // Letze Zufallszahl
 int lastRandomNumber2;                // Vorletzte Zufallszahl
 const byte interruptPin1 = 2;          //Pin für Interrupt
-bool switchVr = false;
-bool manu = true;
 bool tasterPressed = false;
 unsigned long time_now = 0;
 byte state = LOW;
 int laststate;
 int last;
 int wert;
-bool ButtonPressed = false;
 byte drehen = 0;            //Drehgeber Werte
 
 
@@ -82,7 +80,6 @@ void setup() {
 
   attachInterrupt(digitalPinToInterrupt(2), interrupt, LOW);
 
-
   encoder = new ClickEncoder(pinB, pinA, taster, stepsPerNotch);
   Timer1.initialize(1000);
   Timer1.attachInterrupt(timerIsr);
@@ -97,7 +94,6 @@ void loop() {
     setHp(false, last);
   }
   if (manu == true) {         //Manueller Modus
-
     drehen += encoder->getValue();
     if (drehen != last) {
       Serial.println(last);
@@ -203,23 +199,23 @@ void setHp(bool manual, int state) {
       mcp.digitalWrite(lsWeiss, HIGH);
       break;
     case 6:
-    mcp.digitalWrite(hpRot, HIGH);
-    mcp.digitalWrite(hpGruen, HIGH);
+      mcp.digitalWrite(hpRot, HIGH);
+      mcp.digitalWrite(hpGruen, HIGH);
       break;
   }
-  if (manual == false) {
+  if (manual == false) {        //Im Automatik Modus: warten bis Signal wieder Auf Hp0 geschaltet wird
     wait(2000);
   }
-  if (manual == true) {
+  if (manual == true) {         //Im manuellen Modus: letzter zustand wird beigehalten bis das Signal umgestellt wird
     laststate = state;
   }
 }
 
 void setVr() {
-
+//Platz für das Vorsignal
 }
 
-int randomgenerator()
+int randomgenerator()       //Zufallsgenerator mit auschluss der letzten zwei erzeugten Zahlen
 {
 anfang:
   randomNumber = random(1, 5);
