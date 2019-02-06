@@ -13,41 +13,44 @@
    Definition der einzelnen Signallampen (Relais)
    Bezeichung der Signallampe <-> Port auf dem MCP
 */
-#define hpGruen 1
-#define hpRot 2
-#define hpGelb 3
-#define zs1 4
-#define vrGelbO 9
-#define vrGruenO 13
-#define vrGelbU 11
-#define vrGruenU 10
-#define lsRot 12
-#define lsWeiss 8
-#define zs3 0
-//#define zs3v 0
+#define HPGRUEN 1
+#define HPROT 2
+#define HPGELB 3
+#define ZS1 4
+#define VRGELBO 9
+#define VRGRUENO 13
+#define VRGELBU 11
+#define VRGRUENU 10
+#define LSROT 12
+#define LSWEISS 8
+#define ZS3 0
+//#define ZS3V 0
 //Pins für Encoder
-#define pinA 9
-#define pinB 8
-#define stepsPerNotch 4 // Klicks bis zum nächsten Schritt
-#define taster 4     // Taster am Encoder
-
+#define PINA 8
+#define PINB 7
+#define STEPSPERNOTCH 4 // Klicks bis zum nächsten Schritt
+#define TASTER 4     // TASTER am Encoder
+#define INTERRUPTPIN 2
 /*
    Definition der Variablen
 */
 bool manu = false;                    //Umschaltung Auto <> Manuell
-int randomNumber;                     // Zufallszahl
-int lastRandomNumber;                 // Letze Zufallszahl
-int lastRandomNumber2;                // Vorletzte Zufallszahl
+byte randomNumber;                     // Zufallszahl
+byte lastRandomNumber;                 // Letze Zufallszahl
+byte lastRandomNumber2;                // Vorletzte Zufallszahl
+byte randomNumberVr;                     // Zufallszahl für Vorsignal
+byte lastRandomNumberVr;                 // Letze Zufallszahl für Vorsignal
+byte lastRandomNumber2Vr;                // Vorletzte Zufallszahl für Vorsignal
 const byte interruptPin1 = 2;          //Pin für Interrupt
-bool tasterPressed = false;
+bool TASTERPressed = false;
 unsigned long time_now = 0;
 byte state = LOW;
-int laststate;
-int last;
+byte laststate;
+byte laststateVr;
+unsigned int last;
+int lastVr;
 int wert;
 byte drehen = 0;            //Drehgeber Werte
-
-
 
 Adafruit_MCP23017 mcp;                //Definition MCP
 ClickEncoder *encoder;
@@ -56,54 +59,67 @@ void timerIsr() {
   encoder->service();
 }
 
+/*
+   Funktionsprototypen
+*/
+void setHP(bool, int);
+void setVr(bool, int);
+void setHalt();
+int randomgeneratorHP();
+int randomgeneratorVr();
+void wait(int);
+void interrupt();
+
 void setup() {
   /*
      Definition der Pins
   */
   mcp.begin(0);                       //Adresse MCP(Relais)
-  mcp.pinMode (hpGruen, OUTPUT);
-  mcp.pinMode (hpRot, OUTPUT);
-  mcp.pinMode (hpGelb, OUTPUT);
-  mcp.pinMode (zs1, OUTPUT);
-  mcp.pinMode (zs3, OUTPUT);
-  mcp.pinMode (vrGelbO, OUTPUT);
-  mcp.pinMode (vrGruenO, OUTPUT);
-  mcp.pinMode (vrGelbU, OUTPUT);
-  mcp.pinMode (vrGruenU, OUTPUT);
-  mcp.pinMode (lsRot, OUTPUT);
-  mcp.pinMode (lsWeiss, OUTPUT);
+  mcp.pinMode (HPGRUEN, OUTPUT);
+  mcp.pinMode (HPROT, OUTPUT);
+  mcp.pinMode (HPGELB, OUTPUT);
+  mcp.pinMode (ZS1, OUTPUT);
+  mcp.pinMode (ZS3, OUTPUT);
+  mcp.pinMode (VRGELBO, OUTPUT);
+  mcp.pinMode (VRGRUENO, OUTPUT);
+  mcp.pinMode (VRGELBU, OUTPUT);
+  mcp.pinMode (VRGRUENU, OUTPUT);
+  mcp.pinMode (LSROT, OUTPUT);
+  mcp.pinMode (LSWEISS, OUTPUT);
+  pinMode(TASTER, INPUT_PULLUP);
+  pinMode(13, OUTPUT);
+  pinMode(INTERRUPTPIN, INPUT_PULLUP);
 
-  pinMode(taster, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(INTERRUPTPIN), interrupt, LOW);
 
   Serial.begin(9600);
   randomSeed(analogRead(0));          // Seed fuer Zufallszahlen
 
-  attachInterrupt(digitalPinToInterrupt(2), interrupt, LOW);
 
-  encoder = new ClickEncoder(pinB, pinA, taster, stepsPerNotch);
+  encoder = new ClickEncoder(PINB, PINA, TASTER, STEPSPERNOTCH);
   Timer1.initialize(1000);
   Timer1.attachInterrupt(timerIsr);
-  last = -1;
+  last = 0;
+
+  setHalt();
 }
 
 void loop() {
   if (manu == false) {             //Automatikmodus
+    digitalWrite (13, LOW);
     setHalt();
     wait(2000);
-    last = randomgenerator();
+    last = randomgeneratorHP();
     setHp(false, last);
   }
   if (manu == true) {         //Manueller Modus
+    digitalWrite (13, HIGH);
     drehen += encoder->getValue();
     if (drehen != last) {
       Serial.println(last);
       if (drehen > 6)
       {
         drehen = 6;
-      }
-      if (drehen < 0)
-      {
-        drehen = 0;
       }
       last = drehen;
       setHp(true, last);
@@ -119,35 +135,35 @@ void loop() {
 
 void setHalt () {
   /*
-     Signal wird auf Halt gestellt(Hauptsignal und Ls), Vorsignal und Zs3(v) wird ausgeschaltet
+     Signal wird auf Halt gestellt(Hauptsignal und Ls), Vorsignal und ZS3(v) wird ausgeschaltet
   */
-  mcp.digitalWrite(hpRot, HIGH);
-  mcp.digitalWrite(hpGruen, LOW);
-  mcp.digitalWrite(hpGelb, LOW);
-  mcp.digitalWrite(zs1, LOW);
-  mcp.digitalWrite(zs3, LOW);
-  mcp.digitalWrite(vrGelbO, LOW);
-  mcp.digitalWrite(vrGruenO, LOW);
-  mcp.digitalWrite(vrGelbU, LOW);
-  mcp.digitalWrite(vrGruenU, LOW);
-  mcp.digitalWrite(lsWeiss, LOW);
-  mcp.digitalWrite(lsRot, HIGH);
+  mcp.digitalWrite(HPROT, HIGH);
+  mcp.digitalWrite(HPGRUEN, LOW);
+  mcp.digitalWrite(HPGELB, LOW);
+  mcp.digitalWrite(ZS1, LOW);
+  mcp.digitalWrite(ZS3, LOW);
+  mcp.digitalWrite(VRGELBO, LOW);
+  mcp.digitalWrite(VRGRUENO, LOW);
+  mcp.digitalWrite(VRGELBU, LOW);
+  mcp.digitalWrite(VRGRUENU, LOW);
+  mcp.digitalWrite(LSWEISS, LOW);
+  mcp.digitalWrite(LSROT, HIGH);
   // Serial.println("Hp0");
 }
 
 void setHp(bool manual, int state) {
   if ((manual == true) && (laststate != state)) {
-    mcp.digitalWrite(hpRot, LOW);
-    mcp.digitalWrite(hpGruen, LOW);
-    mcp.digitalWrite(hpGelb, LOW);
-    mcp.digitalWrite(zs1, LOW);
-    mcp.digitalWrite(zs3, LOW);
-    mcp.digitalWrite(vrGelbO, LOW);
-    mcp.digitalWrite(vrGruenO, LOW);
-    mcp.digitalWrite(vrGelbU, LOW);
-    mcp.digitalWrite(vrGruenU, LOW);
-    mcp.digitalWrite(lsWeiss, LOW);
-    mcp.digitalWrite(lsRot, LOW);
+    mcp.digitalWrite(HPROT, LOW);
+    mcp.digitalWrite(HPGRUEN, LOW);
+    mcp.digitalWrite(HPGELB, LOW);
+    mcp.digitalWrite(ZS1, LOW);
+    mcp.digitalWrite(ZS3, LOW);
+    //    mcp.digitalWrite(VRGELBO, LOW);
+    //    mcp.digitalWrite(VRGRUENO, LOW);
+    //    mcp.digitalWrite(VRGELBU, LOW);
+    //    mcp.digitalWrite(VRGRUENU, LOW);
+    mcp.digitalWrite(LSWEISS, LOW);
+    mcp.digitalWrite(LSROT, LOW);
   }
   switch (state) {
     case 0:
@@ -155,52 +171,64 @@ void setHp(bool manual, int state) {
       break;
     case 1:
       Serial.println("Hp1");
-      mcp.digitalWrite(lsRot, LOW);
-      mcp.digitalWrite(lsWeiss, HIGH);
+      mcp.digitalWrite(LSROT, LOW);
+      mcp.digitalWrite(LSWEISS, HIGH);
       wait(2000);
-      mcp.digitalWrite(hpRot, LOW);
-      mcp.digitalWrite(hpGruen, HIGH);
-      //setVr();
+      mcp.digitalWrite(HPROT, LOW);
+      mcp.digitalWrite(HPGRUEN, HIGH);
+      if (manual == false) {
+        lastVr = randomgeneratorVr();
+        wait(500);
+        setVr(manual, lastVr);
+      }
       break;
     case 2:
       Serial.println("Hp2");
-      mcp.digitalWrite(lsRot, LOW);
-      mcp.digitalWrite(lsWeiss, HIGH);
+      mcp.digitalWrite(LSROT, LOW);
+      mcp.digitalWrite(LSWEISS, HIGH);
       wait(1000);
-      mcp.digitalWrite(hpRot, LOW);
-      mcp.digitalWrite(hpGelb, HIGH);
+      mcp.digitalWrite(HPROT, LOW);
+      mcp.digitalWrite(HPGELB, HIGH);
       wait(200);
-      mcp.digitalWrite(hpGruen, HIGH);
-      //setVr();
+      mcp.digitalWrite(HPGRUEN, HIGH);
+      if (manual == false) {
+        lastVr = randomgeneratorVr();
+        wait(500);
+        setVr(manual, lastVr);
+      }
       break;
     case 3:
-      Serial.println("Hp2 + Zs3");
-      mcp.digitalWrite(lsRot, LOW);
-      mcp.digitalWrite(lsWeiss, HIGH);
+      Serial.println("Hp2 + ZS3");
+      mcp.digitalWrite(LSROT, LOW);
+      mcp.digitalWrite(LSWEISS, HIGH);
       wait(1000);
-      mcp.digitalWrite(hpRot, LOW);
-      mcp.digitalWrite(hpGelb, HIGH);
-      mcp.digitalWrite(zs3, HIGH);
+      mcp.digitalWrite(HPROT, LOW);
+      mcp.digitalWrite(HPGELB, HIGH);
+      mcp.digitalWrite(ZS3, HIGH);
       wait(500);
-      mcp.digitalWrite(hpGruen, HIGH);
-      setVr();
+      mcp.digitalWrite(HPGRUEN, HIGH);
+      if (manual == false) {
+        lastVr = randomgeneratorVr();
+        wait(500);
+        setVr(manual, lastVr);
+      }
       break;
     case 4:
-      Serial.println("Hp0 + Zs1");
-      mcp.digitalWrite(hpRot, HIGH);
-      mcp.digitalWrite(lsRot , LOW);
-      mcp.digitalWrite(lsWeiss , HIGH);
-      mcp.digitalWrite(zs1, HIGH);
+      Serial.println("Hp0 + ZS1");
+      mcp.digitalWrite(HPROT, HIGH);
+      mcp.digitalWrite(LSROT , LOW);
+      mcp.digitalWrite(LSWEISS , HIGH);
+      mcp.digitalWrite(ZS1, HIGH);
       break;
     case 5:
       Serial.println("Hp0 + Sh1");
-      mcp.digitalWrite(hpRot, HIGH);
-      mcp.digitalWrite(lsRot, LOW);
-      mcp.digitalWrite(lsWeiss, HIGH);
+      mcp.digitalWrite(HPROT, HIGH);
+      mcp.digitalWrite(LSROT, LOW);
+      mcp.digitalWrite(LSWEISS, HIGH);
       break;
     case 6:
-      mcp.digitalWrite(hpRot, HIGH);
-      mcp.digitalWrite(hpGruen, HIGH);
+      mcp.digitalWrite(HPROT, HIGH);
+      mcp.digitalWrite(HPGRUEN, HIGH);
       break;
   }
   if (manual == false) {        //Im Automatik Modus: warten bis Signal wieder Auf Hp0 geschaltet wird
@@ -210,23 +238,89 @@ void setHp(bool manual, int state) {
     laststate = state;
   }
 }
+void setVr(bool manual, int state) {
+  if ((manual == true) && (laststateVr != state)) {
+    mcp.digitalWrite(VRGELBO, LOW);
+    mcp.digitalWrite(VRGRUENO, LOW);
+    mcp.digitalWrite(VRGELBU, LOW);
+    mcp.digitalWrite(VRGRUENU, LOW);
+    //mcp.digitalWrite(ZS3V, LOW);
+  }
 
-void setVr() {
-//Platz für das Vorsignal
+  switch (state) {
+    case 1:
+      mcp.digitalWrite(VRGELBO, HIGH);
+      mcp.digitalWrite(VRGRUENO, LOW);
+      mcp.digitalWrite(VRGELBU, HIGH);
+      mcp.digitalWrite(VRGRUENU, LOW);
+      //mcp.digitalWrite(ZS3V, LOW);
+      Serial.println("Vr0");
+      break;
+    case 2:
+      mcp.digitalWrite(VRGELBO, LOW);
+      mcp.digitalWrite(VRGRUENO, HIGH);
+      mcp.digitalWrite(VRGELBU, LOW);
+      mcp.digitalWrite(VRGRUENU, HIGH);
+      //mcp.digitalWrite(ZS3V, LOW);
+      Serial.println("Vr1");
+      break;
+    case 3:
+      mcp.digitalWrite(VRGELBO, LOW);
+      mcp.digitalWrite(VRGRUENO, HIGH);
+      mcp.digitalWrite(VRGELBU, HIGH);
+      mcp.digitalWrite(VRGRUENU, LOW);
+      //mcp.digitalWrite(ZS3V, LOW);
+      Serial.println("Vr2");
+      break;
+    case 4:
+      mcp.digitalWrite(VRGELBO, LOW);
+      mcp.digitalWrite(VRGRUENO, HIGH);
+      mcp.digitalWrite(VRGELBU, HIGH);
+      mcp.digitalWrite(VRGRUENU, LOW);
+      //mcp.digitalWrite(ZS3V, HIGH);
+      Serial.println("Vr2 + Zs3v");
+      break;
+    case 5:
+      mcp.digitalWrite(VRGELBO, HIGH);
+      mcp.digitalWrite(VRGRUENO, LOW);
+      mcp.digitalWrite(VRGELBU, HIGH);
+      mcp.digitalWrite(VRGRUENU, LOW);
+      //mcp.digitalWrite(ZS3V, LOW);
+      Serial.println("Vr0 -> Vr2");
+      wait(2000);
+      mcp.digitalWrite(VRGELBO, LOW);
+      mcp.digitalWrite(VRGRUENO, HIGH);
+      mcp.digitalWrite(VRGELBU, HIGH);
+      mcp.digitalWrite(VRGRUENU, LOW);
+      //mcp.digitalWrite(ZS3V, LOW);
+      break;
+  }
 }
 
-int randomgenerator()       //Zufallsgenerator mit auschluss der letzten zwei erzeugten Zahlen
+int randomgeneratorHP()       //Zufallsgenerator Hauptsignal mit auschluss der letzten zwei erzeugten Zahlen
 {
-anfang:
   randomNumber = random(1, 5);
   if (randomNumber == lastRandomNumber || randomNumber == lastRandomNumber2) {
-    goto anfang;
+    randomgeneratorHP();
   }
   lastRandomNumber2 = lastRandomNumber;
   lastRandomNumber = randomNumber;
   Serial.println(randomNumber);
   return randomNumber;
 }
+
+int randomgeneratorVr()       //Zufallsgenerator Hauptsignal mit auschluss der letzten zwei erzeugten Zahlen
+{
+  randomNumberVr = random(1, 6);
+  if (randomNumberVr == lastRandomNumberVr || randomNumberVr == lastRandomNumber2Vr) {
+    randomgeneratorVr();
+  }
+  lastRandomNumber2Vr = lastRandomNumberVr;
+  lastRandomNumberVr = randomNumberVr;
+  Serial.println(randomNumberVr);
+  return randomNumberVr;
+}
+
 
 void wait(int period)
 {
